@@ -1,0 +1,69 @@
+---
+- name: Setup Nginx and Certbot, configure site
+  hosts: all
+  become: yes
+  tasks:
+    - name: Ensure Nginx and Certbot are installed
+      apt:
+        name: "{{ item }}"
+        state: present
+        update_cache: yes
+      loop:
+        - nginx
+        - certbot
+        - python3-certbot-nginx
+
+    - name: Copy Nginx site configuration if different
+      copy:
+        src: ./nginx.conf
+        dest: /etc/nginx/sites-available/site.conf
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Reload Nginx
+
+    
+
+    - name: Test Nginx configuration
+      command: nginx -t
+      register: nginx_test
+      ignore_errors: yes
+
+    - name: Fail if Nginx configuration test failed
+      fail:
+        msg: "Nginx configuration test failed"
+      when: nginx_test.rc != 0
+      
+    
+
+    - name: Copy site content if different
+      copy:
+        src: ./index.html
+        dest: /var/www/html/
+        owner: www-data
+        group: www-data
+        mode: '0755'
+
+    - name: Ensure user exists and has correct group
+      user:
+        name: user
+        state: present
+        groups: www-data
+        home: /home/user
+        create_home: yes
+
+    - name: Set permissions on user's home directory
+      file:
+        path: /home/user
+        state: directory
+        owner: user
+        group: www-data
+        mode: '0750'
+        
+      
+  handlers:
+    - name: Reload Nginx
+      service:
+        name: nginx
+        state: reloaded
+
